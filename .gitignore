@@ -1,0 +1,21 @@
+# Lua cache
+*.luac
+
+# Test outputs
+tests/output/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temp directories
+temp/
+tmp/
