@@ -128,3 +128,70 @@ test("handles deeply nested objects", function()
   assert(result:match("coordinates: Coordinates"))
   assert(result:match("address: Address"))
 end)
+
+-- Edge case tests
+
+test("handles empty JSON object", function()
+  local json = [[{}]]
+  local result = converter.json_to_typescript(json)
+  local expected = [[interface Root {
+}]]
+  assert_eq(result, expected)
+end)
+
+test("handles empty array in object", function()
+  local json = [[{"items": []}]]
+  local result = converter.json_to_typescript(json)
+  local expected = [[interface Root {
+  items: any[];
+}]]
+  assert_eq(result, expected)
+end)
+
+test("handles null values", function()
+  local json = [[{"name": null, "age": 30}]]
+  local result = converter.json_to_typescript(json)
+  local expected = [[interface Root {
+  age: number;
+  name: null;
+}]]
+  assert_eq(result, expected)
+end)
+
+test("handles negative numbers", function()
+  local json = [[{"temp": -5, "score": -3.14}]]
+  local result = converter.json_to_typescript(json)
+  local expected = [[interface Root {
+  score: number;
+  temp: number;
+}]]
+  assert_eq(result, expected)
+end)
+
+test("handles escaped quotes in strings", function()
+  local json = [[{"text": "hello \"world\""}]]
+  local result = converter.json_to_typescript(json)
+  local expected = [[interface Root {
+  text: string;
+}]]
+  assert_eq(result, expected)
+end)
+
+test("handles root-level array of primitives", function()
+  local json = "[1, 2, 3]"
+  local result = converter.json_to_typescript(json)
+  -- Arrays at root should produce some valid output
+  assert(result:match("interface Root"))
+end)
+
+test("handles root-level array of objects", function()
+  local json = '[{"id": 1}, {"id": 2}]'
+  local result = converter.json_to_typescript(json)
+  assert(result:match("interface Root"))
+end)
+
+test("errors on invalid JSON", function()
+  local json = [[{invalid}]]
+  local status, _ = pcall(converter.json_to_typescript, json)
+  assert_false(status, "should error on invalid JSON")
+end)

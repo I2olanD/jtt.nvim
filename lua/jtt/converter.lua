@@ -17,54 +17,65 @@ local function is_array(t)
   return true
 end
 
-local function is_object(t)
-  return type(t) == "table" and not is_array(t)
+local function is_empty_table(t)
+  if type(t) ~= "table" then return false end
+  return next(t) == nil
 end
 
-local function collect_interfaces(value, key, interfaces)
-  local t = type(value)
-  if t == "table" then
-    if is_array(value) then
-      if #value > 0 and is_object(value[1]) then
-        local interface_name = capitalize_first(key or "Item")
-        if not interfaces[interface_name] then
-          interfaces[interface_name] = value[1]
-          -- Recursively collect from array items
-          for k, v in pairs(value[1]) do
-            collect_interfaces(v, k, interfaces)
-          end
-        end
-        return interface_name .. "[]"
-      elseif #value > 0 then
-        return collect_interfaces(value[1], nil, interfaces) .. "[]"
-      else
-        return "any[]"
-      end
-    elseif is_object(value) then
-      local interface_name = capitalize_first(key or "Unknown")
+local function is_null(value)
+  -- Check for vim.NIL (userdata) or fallback json.null sentinel
+  if vim and vim.NIL and value == vim.NIL then
+    return true
+  end
+  if type(value) == "table" and tostring(value) == "null" then
+    return true
+  end
+  return false
+end
+
+local function is_object(t)
+  return type(t) == "table" and not is_array(t) and not is_null(t)
+end
+
+local get_typescript_type
+
+local function collect_interfaces(value, key, interfaces, is_property)
+  if is_null(value) then
+    return
+  end
+  if type(value) ~= "table" then
+    return
+  end
+  if is_empty_table(value) and is_property then
+    return
+  end
+  if is_array(value) then
+    if #value > 0 and is_object(value[1]) then
+      local interface_name = capitalize_first(key or "Item")
       if not interfaces[interface_name] then
-        interfaces[interface_name] = value
-        -- Recursively collect from object properties
-        for k, v in pairs(value) do
-          collect_interfaces(v, k, interfaces)
+        interfaces[interface_name] = value[1]
+        for k, v in pairs(value[1]) do
+          collect_interfaces(v, k, interfaces, true)
         end
       end
-      return interface_name
-    else
-      return "any"
+    elseif #value > 0 then
+      collect_interfaces(value[1], nil, interfaces, false)
     end
-  elseif t == "string" then
-    return "string"
-  elseif t == "number" then
-    return "number"
-  elseif t == "boolean" then
-    return "boolean"
-  else
-    return "any"
+  elseif is_object(value) then
+    local interface_name = capitalize_first(key or "Unknown")
+    if not interfaces[interface_name] then
+      interfaces[interface_name] = value
+      for k, v in pairs(value) do
+        collect_interfaces(v, k, interfaces, true)
+      end
+    end
   end
 end
 
-local function get_typescript_type(value, key)
+get_typescript_type = function(value, key, is_property)
+  if is_null(value) then
+    return "null"
+  end
   local t = type(value)
   if t == "string" then
     return "string"
@@ -73,11 +84,14 @@ local function get_typescript_type(value, key)
   elseif t == "boolean" then
     return "boolean"
   elseif t == "table" then
+    if is_empty_table(value) and is_property then
+      return "any[]"
+    end
     if is_array(value) then
       if #value > 0 and is_object(value[1]) then
         return capitalize_first(key or "Item") .. "[]"
       elseif #value > 0 then
-        return get_typescript_type(value[1], nil) .. "[]"
+        return get_typescript_type(value[1], nil, false) .. "[]"
       else
         return "any[]"
       end
@@ -101,7 +115,7 @@ local function generate_interface(name, obj)
   table.sort(keys)
   
   for _, key in ipairs(keys) do
-    local ts_type = get_typescript_type(obj[key], key)
+    local ts_type = get_typescript_type(obj[key], key, true)
     table.insert(lines, string.format("  %s: %s;", key, ts_type))
   end
   

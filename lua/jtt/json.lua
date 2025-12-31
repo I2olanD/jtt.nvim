@@ -1,5 +1,10 @@
 local M = {}
 
+-- Sentinel value for JSON null (similar to vim.NIL)
+M.null = setmetatable({}, {
+  __tostring = function() return "null" end
+})
+
 function M.decode(str)
   local pos = 1
   
@@ -110,7 +115,7 @@ function M.decode(str)
       return false
     elseif str:sub(pos, pos+3) == "null" then
       pos = pos + 4
-      return nil
+      return M.null
     elseif char:match("[%-0-9]") then
       return parse_number()
     else
